@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подбор средств АДК</title>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&amp;family=Unbounded:wght@500;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap">
+<style>
+/* Layout: рабочий инструмент — слева вопросы блоками, справа липкая панель итога; на телефоне итог идёт после вопросов */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#18202E; --muted:#5A6577; --line:#DCE2E9;
+  --accent:#2F55A4; --accent-soft:#E6ECF8;
+  --yes:#1F7A4D; --yes-soft:#E4F3EA; --no:#A23B3B; --no-soft:#F7E6E6;
+  --zbr:#8A5A00; --zbr-soft:#FBF0D9;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11161F; --surface:#1A212D; --ink:#E7EBF2; --muted:#9AA5B6; --line:#2C3545;
+  --accent:#8EAEF0; --accent-soft:#233252;
+  --yes:#6FD19D; --yes-soft:#173527; --no:#F09595; --no-soft:#3A1F22;
+  --zbr:#F0C060; --zbr-soft:#3A2E24; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161F; --surface:#1A212D; --ink:#E7EBF2; --muted:#9AA5B6; --line:#2C3545;
+  --accent:#8EAEF0; --accent-soft:#233252;
+  --yes:#6FD19D; --yes-soft:#173527; --no:#F09595; --no-soft:#3A1F22;
+  --zbr:#F0C060; --zbr-soft:#3A2E24; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header h1{font-family:var(--f-display);font-weight:700;font-size:clamp(22px,3.2vw,30px);margin:0 0 6px;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:70ch}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0 6px}
+.bar .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-right:4px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13.5px}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.tabs{display:flex;gap:4px;margin:18px 0 0;border-bottom:1px solid var(--line)}
+.tab{border:0;background:none;padding:10px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,420px);gap:28px;margin-top:22px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.block{margin-bottom:26px}
+.block h2{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0 0 10px;display:flex;justify-content:space-between;gap:12px}
+.block h2 span:last-child{font-family:var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:0}
+.q{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px 14px;align-items:start;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+.q .code{font-family:var(--f-mono);font-size:12px;color:var(--accent);padding-top:3px;min-width:2.2em}
+.q .txt{min-width:0}
+.q .hint{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.yn{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;align-self:center}
+.yn button{border:0;background:var(--surface);padding:6px 14px;font-weight:600;font-size:14px;min-width:52px}
+.yn button+button{border-left:1px solid var(--line)}
+.yn button.y[aria-pressed="true"]{background:var(--yes-soft);color:var(--yes)}
+.yn button.n[aria-pressed="true"]{background:var(--no-soft);color:var(--no)}
+@media (max-width:520px){.q{grid-template-columns:auto minmax(0,1fr)}.yn{grid-column:2;justify-self:start}}
+aside{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:900px){aside{position:static;max-height:none}}
+aside h2{font-family:var(--f-display);font-weight:500;font-size:17px;margin:0 0 4px}
+.pending{font-size:13px;color:var(--zbr);background:var(--zbr-soft);border-radius:6px;padding:6px 10px;margin:8px 0 0}
+.levels{display:grid;gap:6px;margin:14px 0 6px;font-size:14px}
+.levels div{display:grid;grid-template-columns:118px minmax(0,1fr);gap:8px}
+@media (max-width:420px){.levels div{grid-template-columns:minmax(0,1fr)}}
+.levels dt{color:var(--muted);margin:0}
+.levels dd{margin:0;font-weight:600}
+.levels dd small{display:block;font-weight:400;color:var(--muted)}
+.sec{margin-top:18px}
+.sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.sec h3 i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.core h3{color:var(--accent)} .core h3 i{background:var(--accent)}
+.rec h3{color:var(--yes)} .rec h3 i{background:var(--yes)}
+.zbr h3{color:var(--zbr)} .zbr h3 i{background:var(--zbr)}
+.exc h3{color:var(--muted)} .exc h3 i{background:var(--muted)}
+.item{padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.item:first-of-type{border-top:0}
+.item b{font-weight:600}
+.item .num{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);margin-right:6px}
+.item .role{font-size:11.5px;color:var(--muted);margin-left:6px}
+.item .why{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.tag{display:inline-block;font-size:12px;border-radius:4px;padding:1px 7px;margin-top:4px;background:var(--accent-soft);color:var(--accent)}
+.gtag{background:var(--yes-soft);color:var(--yes)}
+.empty{color:var(--muted);font-size:13.5px}
+details summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+.btn{border:1px solid var(--accent);background:var(--accent);color:var(--surface);border-radius:8px;padding:7px 14px;font-weight:600;font-size:14px}
+.btn.ghost{background:transparent;color:var(--accent)}
+.note{font-size:12.5px;color:var(--muted);margin-top:14px}
+.meta{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:26px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px 14px}
+.meta h2{grid-column:1/-1;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0}
+.meta label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.meta input{font:16px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-height:40px;width:100%}
+.meta input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sendmsg{font-size:13.5px;margin:10px 0 0;padding:8px 10px;border-radius:6px;background:var(--yes-soft);color:var(--yes)}
+.sendmsg.warn{background:var(--zbr-soft);color:var(--zbr)}
+.copyarea{width:100%;min-height:140px;margin-top:8px;font:13px/1.45 var(--f-body);background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:8px}
+.rules{margin-top:22px}
+.rules p{max-width:75ch;color:var(--muted)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13.5px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;background:var(--bg)}
+td code{font-family:var(--f-mono);font-size:12px;color:var(--accent)}
+td.n{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.ladder{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 18px;padding:0;list-style:none}
+.ladder li{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:13.5px}
+.ladder li span{font-family:var(--f-mono);font-size:11.5px;color:var(--accent);margin-right:6px}
+@media (prefers-reduced-motion:no-preference){.q{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Подбор средств АДК</h1>
+    <p>Опросник для взрослых людей с расстройствами аутистического спектра, проживающих в стационарных организациях социального обслуживания. Ответы «да / нет» по сенсорным, моторным и когнитивным возможностям пользователя и его потребностям. Итог собирается справа по мере ответов: уровень доступной коммуникации, группа по классификации С. фон Течнера, тип символов, подходящие средства, зона ближайшего развития и средства, которые сейчас не подходят, с причинами. Нумерация средств — по «Списку средств АДК».</p>
+  </header>
+
+  <div class="bar" role="group" aria-label="Опросник">
+    <button class="chip on" data-profile="new" id="p-new">Новый опросник</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="t-q" aria-selected="true">Опросник</button>
+    <button class="tab" role="tab" id="t-r" aria-selected="false">Правила отбора</button>
+  </div>
+
+  <section id="v-q">
+    <div class="grid">
+      <div>
+        <div id="questions"><div class="block"><h2><span>Сенсорика</span><span>0/2</span></h2><div class="q"><span class="code">А1</span>
+      <div class="txt">Видит ли человек достаточно, чтобы узнавать предметы и картинки размером с карточку (5×5 см) на расстоянии вытянутой руки?<span class="hint">Функциональное зрение с учётом очков и коррекции.</span></div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-A1" data-q="A1" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-A1" data-q="A1" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">А2</span>
+      <div class="txt">Слышит ли он речь обычной громкости (в том числе со слуховым аппаратом или кохлеарным имплантом)?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-A2" data-q="A2" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-A2" data-q="A2" data-v="0" aria-pressed="false">Нет</button></div></div></div><div class="block"><h2><span>Моторика</span><span>0/1</span></h2><div class="q"><span class="code">Б1</span>
+      <div class="txt">Есть ли хотя бы одно надёжное произвольное движение (рукой, головой, ногой, взглядом), которое человек выполняет, когда сам хочет?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-B1" data-q="B1" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-B1" data-q="B1" data-v="0" aria-pressed="false">Нет</button></div></div></div><div class="block"><h2><span>Понимание и коммуникация</span><span>0/2</span></h2><div class="q"><span class="code">В1</span>
+      <div class="txt">Действует ли человек намеренно, чтобы повлиять на другого (тянет за руку, переводит взгляд с предмета на взрослого, протестует)?<span class="hint">«Нет» — уровни I–II по Роуленд: поведение ещё не направлено на собеседника.</span></div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-C1" data-q="C1" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-C1" data-q="C1" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">В2</span>
+      <div class="txt">Понимает ли он связь «моё действие → результат»: повторяет действие, чтобы снова получить результат (нажал — зазвучало)?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-C2" data-q="C2" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-C2" data-q="C2" data-v="0" aria-pressed="false">Нет</button></div></div></div><div class="block"><h2><span>Речь (группа по Течнеру)</span><span>0/2</span></h2><div class="q"><span class="code">Г2</span>
+      <div class="txt">Есть ли у него собственная речь — хотя бы отдельные слова, которые понимают близкие?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-E2" data-q="E2" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-E2" data-q="E2" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">Г4</span>
+      <div class="txt">Можно ли ожидать, что речь будет развиваться (за последний год появились новые слова, растёт словарь)?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-E4" data-q="E4" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-E4" data-q="E4" data-v="0" aria-pressed="false">Нет</button></div></div></div><div class="block"><h2><span>Потребности и окружение</span><span>0/5</span></h2><div class="q"><span class="code">Д2</span>
+      <div class="txt">Нужно ли ему общаться с людьми, которые не знают его способа общения (в магазине, в новой группе, у врача)?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-D2" data-q="D2" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-D2" data-q="D2" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">Д3</span>
+      <div class="txt">Нужно ли ему привлекать внимание голосом, когда собеседник не смотрит или находится в другом месте?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-D3" data-q="D3" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-D3" data-q="D3" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">Д4</span>
+      <div class="txt">Тревожится ли он при смене занятий, трудно ли ему ориентироваться в распорядке дня и во времени (не знает, что будет дальше, когда придут близкие) или выполнять действие по шагам?<span class="hint">«Да» — показаны расписания, календарь с визуальными опорами и пооперационные карты.</span></div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-D4" data-q="D4" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-D4" data-q="D4" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">Д5</span>
+      <div class="txt">Готовы ли близкие и педагоги выучить жесты?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-D5" data-q="D5" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-D5" data-q="D5" data-v="0" aria-pressed="false">Нет</button></div></div><div class="q"><span class="code">Д6</span>
+      <div class="txt">Есть ли возможность приобрести и обслуживать электронное устройство (коммуникатор, планшет)?</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-D6" data-q="D6" data-v="1" aria-pressed="false">Да</button><button class="n" id="n-D6" data-q="D6" data-v="0" aria-pressed="false">Нет</button></div></div></div></div>
+      </div>
+      <aside id="result" aria-live="polite"><h2>Итог</h2><div class="pending">Осталось вопросов: 12. Пока они без ответа, они считаются ответом «нет».</div><dl class="levels">
+    <div><dt>Доступный уровень коммуникации</dt><dd>Досимволическая<small>взгляд, мимика, движения, вокализации; символы пока не используются</small></dd></div>
+    <div><dt>Группа (Течнер)</dt><dd>Альтернативная коммуникация<small>Речь не служит ни для понимания, ни для выражения. АДК нужна в обе стороны: собеседники сами обращаются к человеку жестами и символами (моделирование), средства для понимания — в приоритете. АДК становится основным языком.</small></dd></div>
+    <div><dt>Тип символов</dt><dd>естественные сигналы<small>следующий шаг: намеренная коммуникация</small></dd></div></dl><div class="sec core"><h3><i></i>Основное сочетание</h3><div class="item"><b>Тип символов:</b> естественные сигналы</div><div class="item"><b>Основное средство:</b> 1. Естественные довербальные средства</div><div class="item"><b>Коммуникативный паспорт:</b> сигналы человека пока неконвенциональны: описать их, чтобы все сотрудники понимали их одинаково</div></div><div class="sec rec"><h3><i></i>Подходят сейчас · 1</h3><div class="item"><span class="num">1</span><b>Естественные довербальные средства</b><span class="role">система</span><br><span class="tag">показано: основа любой системы АДК</span></div></div><div class="sec zbr"><h3><i></i>Зона ближайшего развития · 0</h3><p class="empty">Нет средств, до которых не хватает одного шага.</p></div><div class="sec exc"><details id="exc"><summary>Не подходят сейчас · 18</summary><div class="item"><span class="num">2</span><b>Сигналы «да / нет», выбор из вариантов</b><span class="role">система + способ доступа</span><span class="why">пока нет надёжных ответов «да / нет»</span></div><div class="item"><span class="num">3</span><b>Функциональные жесты, Макатон</b><span class="role">система</span><span class="why">нужно зрение; нужны направленные движения рук; окружение не готово учить жесты; нет подражания движениям рук; нужен уровень «копии и части предметов», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">4.1</span><b>Тактильные жесты</b><span class="role">система</span><span class="why">нужна тактильная чувствительность; нужны раздельные движения пальцев; нужен уровень «копии и части предметов», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">4.2</span><b>Дактильно-контактная речь, дермография, ЛОРМ</b><span class="role">система</span><span class="why">нужна тактильная чувствительность; нужны раздельные движения пальцев; нужно знание букв</span></div><div class="item"><span class="num">11</span><b>PECS</b><span class="role">носитель</span><span class="why">нужно зрение; нужно взять и передать карточку; нужен уровень «намеренная коммуникация», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">12</span><b>Коммуникативные доски / таблицы</b><span class="role">носитель</span><span class="why">нужно зрение; нужно указание рукой (без рук — указание взглядом); нужен уровень «тактильные символы», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">13</span><b>Коммуникативные книги, PODD</b><span class="role">носитель</span><span class="why">нужно зрение; нет способа указать на символ; нужен уровень «пиктограммы», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">14</span><b>Указание взглядом: рамка E-tran, айтрекер</b><span class="role">способ доступа</span><span class="why">нужно зрение; нужен контроль взгляда и головы; нужен уровень «тактильные символы», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">15</span><b>Предметное расписание</b><span class="role">рецептивное</span><span class="why">нет запроса на поддержку распорядка; нужен уровень «функциональные предметы», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">16</span><b>Графическое расписание, пооперационные карты</b><span class="role">рецептивное</span><span class="why">нет запроса на поддержку распорядка; нужно зрение; нужен уровень «тактильные символы», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">17</span><b>Однокнопочный коммуникатор</b><span class="role">носитель</span><span class="why">нет надёжного произвольного движения; нет возможности приобрести устройство; нет понимания связи «действие → результат»</span></div><div class="item"><span class="num">18</span><b>Многокнопочный коммуникатор</b><span class="role">носитель</span><span class="why">нужно зрение; нужно нажать нужную кнопку рукой; нет возможности приобрести устройство; нужен уровень «тактильные символы», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">19</span><b>Приложение-коммуникатор с синтезом речи</b><span class="role">носитель</span><span class="why">нужно зрение; нет способа управления (касание или взгляд); нет возможности приобрести устройство; нужен уровень «цветные картинки», сейчас — «нет намеренного поведения»</span></div><div class="item"><span class="num">20</span><b>Алфавитная доска (выкладывание букв)</b><span class="role">система</span><span class="why">нужно зрение; нужен захват и перенос мелких букв; нужно знание букв</span></div><div class="item"><span class="num">21</span><b>Слоговые и буквенные таблицы</b><span class="role">носитель</span><span class="why">нужно зрение; нет способа указать на букву; нужно знание букв</span></div><div class="item"><span class="num">22</span><b>Письмо (рукописное)</b><span class="role">система</span><span class="why">нужно зрение; нужно удерживать ручку; нужно знание букв</span></div><div class="item"><span class="num">23</span><b>Печать / набор текста</b><span class="role">система</span><span class="why">нужно зрение; нужно нажимать клавиши; нет устройства; нужно знание букв</span></div><div class="item"><span class="num">24</span><b>Шрифт Брайля</b><span class="role">система</span><span class="why">нужна тактильная чувствительность; нужны раздельные движения пальцев; нужно знание букв</span></div></details></div><div class="actions"><button class="btn" id="send">Отправить</button><button class="btn ghost" id="copy">Скопировать итог</button><button class="btn ghost" id="reset">Очистить ответы</button></div>
+  <p class="sendmsg" id="sendmsg" hidden=""></p>
+  <textarea class="copyarea" id="copytext" hidden="" readonly=""></textarea>
+  <p class="note">Опросник даёт первичный подбор. Окончательное решение принимается после пробного использования средства. Обычно человеку подходит сочетание: тип символов + носитель (+ способ доступа) + естественные средства.</p></aside>
+    </div>
+  </section>
+
+  <section id="v-r" class="rules" hidden="">
+   <p>Средство попадает в «Подходят сейчас», если выполнены все его условия. В «Зону ближайшего развития» — если не выполнено ровно одно условие, и оно когнитивное: до нужного уровня символов не хватает одной ступени или не сформирован один навык (подражание, ответы «да / нет», связь «действие → результат», свободное использование письменной речи при знании букв). Вопросы, скрытые по ходу опроса, считаются ответом «нет». Типы символов (п. 5–10 списка) не перечисляются среди средств: они определяются по лестнице уровней и выводятся отдельной строкой итога.</p>
+   <h3>Уровень доступной коммуникации и основное сочетание</h3>
+   <p>Уровень доступной коммуникации выводится по пятиуровневой шкале: досимволическая; символическая с помощью предметов (при доступности жестов — предметов и жестов); символическая с помощью изображений (без зрения — тактильных символов); письменная речь. Блок «Основное сочетание» сводит итог к тому, с чего начать: тип символов, основное средство (первая по приоритету система или носитель из списка подходящих, при досимволическом уровне — естественные средства), способ доступа (указание взглядом или выбор из вариантов, если нет указания рукой), средство для понимания распорядка. Коммуникативный паспорт рекомендуется, если сигналы человека пока неконвенциональны (досимволический уровень или функциональные предметы), речь неразборчива, при отсутствии речи и нарушении слуха, а также в группе альтернативной коммуникации.</p>
+   <h3>Группа по Течнеру</h3>
+   <p>Группа показывает, <i>для чего</i> человеку нужна АДК, и определяет, какие из подходящих средств поднимаются наверх списка. Порядок проверки: не понимает речь (<code>В12</code>, при нарушении слуха — жесты, <code>Г1</code>) → альтернативная; речь понятна и незнакомым и состоит из фраз (<code>Г2</code>, <code>Г3</code> и <code>Г3ф</code>) → АДК не требуется; ожидается развитие речи (<code>Г4</code>) → вспомогательная, развитие; речь понятна, но ограничена отдельными словами (<code>Г2</code> и <code>Г3</code>, нет <code>Г3ф</code>) → вспомогательная, ограниченная речь; речь есть, но неразборчива (<code>Г2</code>) → вспомогательная, ситуативная; иначе → экспрессивная.</p><p>Уровень письменной речи определяется, только если человек знает буквы (<code>В9</code>) и пользуется письменной речью свободно (<code>В9ф</code>). Если буквы знакомы, но письмо затруднено, буквенные средства попадают в зону ближайшего развития, а тип символов определяется по уровню изображений.</p>
+   <ul class="ladder"><li>Альтернативная коммуникация</li><li>Экспрессивная коммуникация</li><li>Вспомогательная коммуникация (развитие речи)</li><li>Вспомогательная коммуникация (ситуативная)</li><li>Вспомогательная коммуникация (ограниченная речь)</li><li>Речь функциональна</li></ul>
+   <h3>Лестница уровней символов</h3>
+   <ul class="ladder"><li><span>0</span>нет намеренного поведения</li><li><span>1</span>намеренная коммуникация</li><li><span>2</span>функциональные предметы</li><li><span>3</span>копии и части предметов</li><li><span>4</span>фотографии</li><li><span>5</span>цветные картинки</li><li><span>6</span>пиктограммы</li><li><span>7</span>напечатанные слова</li></ul>
+   <p>Без зрения ступень 4 — тактильные символы (вопрос <code>В5т</code>). Знание букв (<code>В9</code>) учитывается отдельно.</p>
+   <h3>Условия для средств</h3>
+   <div class="tw"><table><thead><tr><th>№</th><th>Средство</th><th>Нужны ответы «да»</th><th>Что проверяется</th></tr></thead><tbody><tr><td class="n">1</td><td><b>Естественные довербальные средства</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td>всегда</td><td></td></tr><tr><td class="n">2</td><td><b>Сигналы «да / нет», выбор из вариантов</b><br><span style="color:var(--muted);font-size:12.5px">система + способ доступа</span></td><td><code>В13</code></td><td>пока нет надёжных ответов «да / нет»</td></tr><tr><td class="n">3</td><td><b>Функциональные жесты, Макатон</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td><code>А1 Б2 Д5 В11</code>, уровень ≥ копии предметов</td><td>нужно зрение; нужны направленные движения рук; окружение не готово учить жесты; нет подражания движениям рук; уровень ≥ «копии и части предметов»</td></tr><tr><td class="n">4.1</td><td><b>Тактильные жесты</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td>нет <code>А1</code> и <code>А2</code>; <code>А3 Б4</code>, уровень ≥ копии предметов</td><td>средство для слепоглухих; нужна тактильная чувствительность; нужны раздельные движения пальцев; уровень ≥ «копии и части предметов»</td></tr><tr><td class="n">4.2</td><td><b>Дактильно-контактная речь, дермография, ЛОРМ</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td>нет <code>А1</code> и <code>А2</code>; <code>А3 Б4 В9 В9ф</code></td><td>средство для слепоглухих; нужна тактильная чувствительность; нужны раздельные движения пальцев</td></tr><tr><td class="n">11</td><td><b>PECS</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>А1 Б3 В1</code>; не (<code>Д1</code> и <code>В9</code>)</td><td>нужно зрение; нужно взять и передать карточку; сам начинает общение и владеет буквами — PECS избыточен; уровень ≥ «намеренная коммуникация»</td></tr><tr><td class="n">12</td><td><b>Коммуникативные доски / таблицы</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>А1 Б2</code>, уровень ≥ фото</td><td>нужно зрение; нужно указание рукой (без рук — указание взглядом); уровень ≥ «фотографии»</td></tr><tr><td class="n">13</td><td><b>Коммуникативные книги, PODD</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>А1</code>; <code>Б2</code>, <code>Б6</code> или <code>В13+В14</code>; уровень ≥ пиктограммы</td><td>нужно зрение; нет способа указать на символ; уровень ≥ «пиктограммы»</td></tr><tr><td class="n">14</td><td><b>Указание взглядом: рамка E-tran, айтрекер</b><br><span style="color:var(--muted);font-size:12.5px">способ доступа</span></td><td><code>А1 Б6</code>, нет <code>Б2</code>, уровень ≥ фото</td><td>нужно зрение; нужен контроль взгляда и головы; указывает рукой — указание взглядом не нужно; уровень ≥ «фотографии»</td></tr><tr><td class="n">15</td><td><b>Предметное расписание</b><br><span style="color:var(--muted);font-size:12.5px">рецептивное</span></td><td><code>Д4</code>; уровень ≥ функц. предметы; без зрения или уровень ниже фото</td><td>нет запроса на поддержку распорядка; подойдёт графическое расписание; уровень ≥ «функциональные предметы»</td></tr><tr><td class="n">16</td><td><b>Графическое расписание, пооперационные карты</b><br><span style="color:var(--muted);font-size:12.5px">рецептивное</span></td><td><code>Д4 А1</code>, уровень ≥ фото</td><td>нет запроса на поддержку распорядка; нужно зрение; уровень ≥ «фотографии»</td></tr><tr><td class="n">17</td><td><b>Однокнопочный коммуникатор</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>Б1 В2 Д6</code></td><td>нет надёжного произвольного движения; нет возможности приобрести устройство; нет понимания связи «действие → результат»</td></tr><tr><td class="n">18</td><td><b>Многокнопочный коммуникатор</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>А1 Б2 Д6</code>, уровень ≥ фото</td><td>нужно зрение; нужно нажать нужную кнопку рукой; нет возможности приобрести устройство; уровень ≥ «фотографии»</td></tr><tr><td class="n">19</td><td><b>Приложение-коммуникатор с синтезом речи</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>А1 Д6</code>; <code>Б2</code> или <code>Б6</code>; уровень ≥ картинки</td><td>нужно зрение; нет способа управления (касание или взгляд); нет возможности приобрести устройство; уровень ≥ «цветные картинки»</td></tr><tr><td class="n">20</td><td><b>Алфавитная доска (выкладывание букв)</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td><code>А1 Б3 Б4 В9 В9ф</code></td><td>нужно зрение; нужен захват и перенос мелких букв</td></tr><tr><td class="n">21</td><td><b>Слоговые и буквенные таблицы</b><br><span style="color:var(--muted);font-size:12.5px">носитель</span></td><td><code>А1 В9 В9ф</code>; <code>Б2</code>, <code>Б6</code> или <code>В13+В14</code></td><td>нужно зрение; нет способа указать на букву</td></tr><tr><td class="n">22</td><td><b>Письмо (рукописное)</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td><code>А1 Б5 В9 В9ф</code></td><td>нужно зрение; нужно удерживать ручку</td></tr><tr><td class="n">23</td><td><b>Печать / набор текста</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td><code>А1 Б2 В9 В9ф Д6</code></td><td>нужно зрение; нужно нажимать клавиши; нет устройства</td></tr><tr><td class="n">24</td><td><b>Шрифт Брайля</b><br><span style="color:var(--muted);font-size:12.5px">система</span></td><td>нет <code>А1</code>; <code>А3 Б4 В9 В9ф</code></td><td>при сохранном зрении не требуется; нужна тактильная чувствительность; нужны раздельные движения пальцев</td></tr></tbody></table></div>
+   <h3 style="margin-top:24px">Вопросы</h3>
+   <div class="tw"><table><thead><tr><th>Код</th><th>Блок</th><th>Вопрос</th></tr></thead><tbody><tr><td class="n">А1</td><td>Сенсорика</td><td>Видит ли человек достаточно, чтобы узнавать предметы и картинки размером с карточку (5×5 см) на расстоянии вытянутой руки?</td></tr><tr><td class="n">А2</td><td>Сенсорика</td><td>Слышит ли он речь обычной громкости (в том числе со слуховым аппаратом или кохлеарным имплантом)?</td></tr><tr><td class="n">А3</td><td>Сенсорика</td><td>Различает ли он предметы и фактуры на ощупь (ладонями и пальцами)?</td></tr><tr><td class="n">Б1</td><td>Моторика</td><td>Есть ли хотя бы одно надёжное произвольное движение (рукой, головой, ногой, взглядом), которое человек выполняет, когда сам хочет?</td></tr><tr><td class="n">Б2</td><td>Моторика</td><td>Может ли он направленно указать рукой (пальцем, кулаком, ладонью) на картинку размером около 5×5 см?</td></tr><tr><td class="n">Б3</td><td>Моторика</td><td>Может ли он взять плоскую карточку и передать её в руку другому человеку?</td></tr><tr><td class="n">Б4</td><td>Моторика</td><td>Может ли он выполнять раздельные движения пальцами (показать один палец, сложить кольцо)?</td></tr><tr><td class="n">Б5</td><td>Моторика</td><td>Может ли он удерживать ручку или карандаш и выводить буквы?</td></tr><tr><td class="n">Б6</td><td>Моторика</td><td>Удерживает ли он голову и может ли направить взгляд на одну из нескольких точек и задержать его на 1–2 секунды?</td></tr><tr><td class="n">Б7</td><td>Моторика</td><td>Может ли он сам подойти или подъехать на коляске к собеседнику?</td></tr><tr><td class="n">В1</td><td>Понимание и коммуникация</td><td>Действует ли человек намеренно, чтобы повлиять на другого (тянет за руку, переводит взгляд с предмета на взрослого, протестует)?</td></tr><tr><td class="n">В2</td><td>Понимание и коммуникация</td><td>Понимает ли он связь «моё действие → результат»: повторяет действие, чтобы снова получить результат (нажал — зазвучало)?</td></tr><tr><td class="n">В3</td><td>Понимание и коммуникация</td><td>Использует ли он реальный предмет как сообщение (приносит чашку, чтобы попить; протягивает куртку, чтобы пойти гулять)?</td></tr><tr><td class="n">В4</td><td>Понимание и коммуникация</td><td>Понимает ли он, что уменьшенная копия или часть предмета обозначает сам предмет или событие (игрушечная ложка — «обед»)?</td></tr><tr><td class="n">В5т</td><td>Понимание и коммуникация</td><td>Узнаёт ли он рельефный или фактурный символ на карточке как обозначение предмета или события?</td></tr><tr><td class="n">В5</td><td>Понимание и коммуникация</td><td>Соотносит ли он фотографию знакомого предмета с самим предметом (выбирает нужную фотографию)?</td></tr><tr><td class="n">В6</td><td>Понимание и коммуникация</td><td>Соотносит ли он цветную картинку (не фото именно этого предмета) с реальным предметом?</td></tr><tr><td class="n">В7</td><td>Понимание и коммуникация</td><td>Узнаёт ли он стилизованные символы-пиктограммы (ПИК, PCS)?</td></tr><tr><td class="n">В8</td><td>Понимание и коммуникация</td><td>Узнаёт ли он хотя бы несколько знакомых напечатанных слов целиком?</td></tr><tr><td class="n">В9</td><td>Понимание и коммуникация</td><td>Знает ли он буквы и может ли составить из них слово (зрительно, на ощупь или пальцами)?</td></tr><tr><td class="n">В9ф</td><td>Понимание и коммуникация</td><td>Пользуется ли он письменной речью свободно: пишет, выкладывает или дактилирует слова, понятные собеседнику, без значительных затруднений и не хуже, чем выбирает картинки?</td></tr><tr><td class="n">В10</td><td>Понимание и коммуникация</td><td>Сочетает ли он два символа, жеста или слова в одном сообщении («хочу» + «сок»)?</td></tr><tr><td class="n">В11</td><td>Понимание и коммуникация</td><td>Подражает ли он движениям рук взрослого?</td></tr><tr><td class="n">В12</td><td>Понимание и коммуникация</td><td>Понимает ли он обращённую речь без подсказок жестом или взглядом (простые инструкции, вопросы)?</td></tr><tr><td class="n">В13</td><td>Понимание и коммуникация</td><td>Отвечает ли он надёжно на вопросы «да / нет» хотя бы о своих желаниях («Хочешь пить?»)?</td></tr><tr><td class="n">В14</td><td>Понимание и коммуникация</td><td>Может ли он ждать несколько секунд и следить, пока ему по очереди показывают или называют варианты?</td></tr><tr><td class="n">Г1</td><td>Речь (группа по Течнеру)</td><td>Понимает ли он обращённые к нему жесты или жестовый язык в повседневных ситуациях?</td></tr><tr><td class="n">Г2</td><td>Речь (группа по Течнеру)</td><td>Есть ли у него собственная речь — хотя бы отдельные слова, которые понимают близкие?</td></tr><tr><td class="n">Г3</td><td>Речь (группа по Течнеру)</td><td>Понимают ли его речь незнакомые люди без помощи близких?</td></tr><tr><td class="n">Г3ф</td><td>Речь (группа по Течнеру)</td><td>Говорит ли он фразами из двух–трёх слов и больше, а не только отдельными словами?</td></tr><tr><td class="n">Г4</td><td>Речь (группа по Течнеру)</td><td>Можно ли ожидать, что речь будет развиваться (за последний год появились новые слова, растёт словарь)?</td></tr><tr><td class="n">Д1</td><td>Потребности и окружение</td><td>Начинает ли человек общение сам, без вопроса или подсказки?</td></tr><tr><td class="n">Д2</td><td>Потребности и окружение</td><td>Нужно ли ему общаться с людьми, которые не знают его способа общения (в магазине, в новой группе, у врача)?</td></tr><tr><td class="n">Д3</td><td>Потребности и окружение</td><td>Нужно ли ему привлекать внимание голосом, когда собеседник не смотрит или находится в другом месте?</td></tr><tr><td class="n">Д4</td><td>Потребности и окружение</td><td>Тревожится ли он при смене занятий, трудно ли ему ориентироваться в распорядке дня и во времени (не знает, что будет дальше, когда придут близкие) или выполнять действие по шагам?</td></tr><tr><td class="n">Д5</td><td>Потребности и окружение</td><td>Готовы ли близкие и педагоги выучить жесты?</td></tr><tr><td class="n">Д6</td><td>Потребности и окружение</td><td>Есть ли возможность приобрести и обслуживать электронное устройство (коммуникатор, планшет)?</td></tr></tbody></table></div></section>
+</div>
+
+<script>
+// ---------- ВОПРОСЫ ----------
+const Q = [
+ {b:"Сенсорика", id:"A1", t:"Видит ли человек достаточно, чтобы узнавать предметы и картинки размером с карточку (5×5 см) на расстоянии вытянутой руки?", h:"Функциональное зрение с учётом очков и коррекции."},
+ {b:"Сенсорика", id:"A2", t:"Слышит ли он речь обычной громкости (в том числе со слуховым аппаратом или кохлеарным имплантом)?"},
+ {b:"Сенсорика", id:"A3", t:"Различает ли он предметы и фактуры на ощупь (ладонями и пальцами)?", s:a=>a.A1===false},
+
+ {b:"Моторика", id:"B1", t:"Есть ли хотя бы одно надёжное произвольное движение (рукой, головой, ногой, взглядом), которое человек выполняет, когда сам хочет?"},
+ {b:"Моторика", id:"B2", t:"Может ли он направленно указать рукой (пальцем, кулаком, ладонью) на картинку размером около 5×5 см?", s:a=>a.B1},
+ {b:"Моторика", id:"B3", t:"Может ли он взять плоскую карточку и передать её в руку другому человеку?", s:a=>a.B2},
+ {b:"Моторика", id:"B4", t:"Может ли он выполнять раздельные движения пальцами (показать один палец, сложить кольцо)?", s:a=>a.B2},
+ {b:"Моторика", id:"B5", t:"Может ли он удерживать ручку или карандаш и выводить буквы?", s:a=>a.B4},
+ {b:"Моторика", id:"B6", t:"Удерживает ли он голову и может ли направить взгляд на одну из нескольких точек и задержать его на 1–2 секунды?", s:a=>a.A1},
+ {b:"Моторика", id:"B7", t:"Может ли он сам подойти или подъехать на коляске к собеседнику?", s:a=>a.B1},
+
+ {b:"Понимание и коммуникация", id:"C1", t:"Действует ли человек намеренно, чтобы повлиять на другого (тянет за руку, переводит взгляд с предмета на взрослого, протестует)?", h:"«Нет» — уровни I–II по Роуленд: поведение ещё не направлено на собеседника."},
+ {b:"Понимание и коммуникация", id:"C2", t:"Понимает ли он связь «моё действие → результат»: повторяет действие, чтобы снова получить результат (нажал — зазвучало)?"},
+ {b:"Понимание и коммуникация", id:"C3", t:"Использует ли он реальный предмет как сообщение (приносит чашку, чтобы попить; протягивает куртку, чтобы пойти гулять)?", s:a=>a.C1},
+ {b:"Понимание и коммуникация", id:"C4", t:"Понимает ли он, что уменьшенная копия или часть предмета обозначает сам предмет или событие (игрушечная ложка — «обед»)?", s:a=>a.C3},
+ {b:"Понимание и коммуникация", id:"C5t", t:"Узнаёт ли он рельефный или фактурный символ на карточке как обозначение предмета или события?", s:a=>a.C4 && a.A1===false},
+ {b:"Понимание и коммуникация", id:"C5", t:"Соотносит ли он фотографию знакомого предмета с самим предметом (выбирает нужную фотографию)?", s:a=>a.C4 && a.A1},
+ {b:"Понимание и коммуникация", id:"C6", t:"Соотносит ли он цветную картинку (не фото именно этого предмета) с реальным предметом?", s:a=>a.C5 && a.A1},
+ {b:"Понимание и коммуникация", id:"C7", t:"Узнаёт ли он стилизованные символы-пиктограммы (ПИК, PCS)?", s:a=>a.C6 && a.A1},
+ {b:"Понимание и коммуникация", id:"C8", t:"Узнаёт ли он хотя бы несколько знакомых напечатанных слов целиком?", s:a=>a.C7 && a.A1},
+ {b:"Понимание и коммуникация", id:"C9", t:"Знает ли он буквы и может ли составить из них слово (зрительно, на ощупь или пальцами)?", s:a=>a.C4},
+ {b:"Понимание и коммуникация", id:"C9f", t:"Пользуется ли он письменной речью свободно: пишет, выкладывает или дактилирует слова, понятные собеседнику, без значительных затруднений и не хуже, чем выбирает картинки?", s:a=>a.C9, h:"«Нет» — если буквы знакомы, но слово составляется медленно, с ошибками и подсказками, словарь ограничен несколькими словами (имя, частые предметы) или задания с картинками даются заметно легче, чем с надписями. Тогда буквенные средства попадут в зону ближайшего развития."},
+ {b:"Понимание и коммуникация", id:"C10", t:"Сочетает ли он два символа, жеста или слова в одном сообщении («хочу» + «сок»)?", s:a=>a.C4},
+ {b:"Понимание и коммуникация", id:"C11", t:"Подражает ли он движениям рук взрослого?", s:a=>a.C1},
+ {b:"Понимание и коммуникация", id:"C12", t:"Понимает ли он обращённую речь без подсказок жестом или взглядом (простые инструкции, вопросы)?", s:a=>a.A2},
+ {b:"Понимание и коммуникация", id:"C13", t:"Отвечает ли он надёжно на вопросы «да / нет» хотя бы о своих желаниях («Хочешь пить?»)?", s:a=>a.C1},
+ {b:"Понимание и коммуникация", id:"C14", t:"Может ли он ждать несколько секунд и следить, пока ему по очереди показывают или называют варианты?", s:a=>a.C2},
+
+ {b:"Речь (группа по Течнеру)", id:"E1", t:"Понимает ли он обращённые к нему жесты или жестовый язык в повседневных ситуациях?", s:a=>a.A2===false, h:"Задаётся при нарушении слуха вместо вопроса о понимании устной речи."},
+ {b:"Речь (группа по Течнеру)", id:"E2", t:"Есть ли у него собственная речь — хотя бы отдельные слова, которые понимают близкие?"},
+ {b:"Речь (группа по Течнеру)", id:"E3", t:"Понимают ли его речь незнакомые люди без помощи близких?", s:a=>a.E2},
+ {b:"Речь (группа по Течнеру)", id:"E3f", t:"Говорит ли он фразами из двух–трёх слов и больше, а не только отдельными словами?", s:a=>a.E2&&a.E3, h:"«Нет» — речь понятна, но ограничена отдельными словами («да», «нет», названия предметов): АДК нужна, чтобы просить, спрашивать и рассказывать."},
+ {b:"Речь (группа по Течнеру)", id:"E4", t:"Можно ли ожидать, что речь будет развиваться (за последний год появились новые слова, растёт словарь)?", s:a=>!(a.E2&&a.E3&&a.E3f)},
+
+ {b:"Потребности и окружение", id:"D1", t:"Начинает ли человек общение сам, без вопроса или подсказки?", s:a=>a.C1},
+ {b:"Потребности и окружение", id:"D2", t:"Нужно ли ему общаться с людьми, которые не знают его способа общения (в магазине, в новой группе, у врача)?"},
+ {b:"Потребности и окружение", id:"D3", t:"Нужно ли ему привлекать внимание голосом, когда собеседник не смотрит или находится в другом месте?"},
+ {b:"Потребности и окружение", id:"D4", t:"Тревожится ли он при смене занятий, трудно ли ему ориентироваться в распорядке дня и во времени (не знает, что будет дальше, когда придут близкие) или выполнять действие по шагам?", h:"«Да» — показаны расписания, календарь с визуальными опорами и пооперационные карты."},
+ {b:"Потребности и окружение", id:"D5", t:"Готовы ли близкие и педагоги выучить жесты?"},
+ {b:"Потребности и окружение", id:"D6", t:"Есть ли возможность приобрести и обслуживать электронное устройство (коммуникатор, планшет)?"},
+];
+
+// ---------- ПРОИЗВОДНЫЕ ПРИЗНАКИ ----------
+function derive(a){
+  const v = a.A1===true, h = a.A2===true;
+  const t = v ? true : a.A3===true;
+  let L = 0;
+  if(a.C1){L=1; if(a.C3){L=2; if(a.C4){L=3;
+    if(v){ if(a.C5){L=4; if(a.C6){L=5; if(a.C7){L=6; if(a.C8){L=7;}}}} }
+    else if(a.C5t){L=4;}
+  }}}
+  return {v,h,t,L,W:!!(a.C9&&a.C9f),C9:!!a.C9};
+}
+const LV = ["нет намеренного поведения","намеренная коммуникация","функциональные предметы","копии и части предметов","фотографии","цветные картинки","пиктограммы","напечатанные слова"];
+const LVt = Object.assign([...LV],{4:"тактильные символы"});
+
+// ---------- СРЕДСТВА И ПРАВИЛА ----------
+const LET = [a=>a.C9&&a.C9f, d=>d.C9?"буквы знакомы, но письменная речь пока не используется свободно — развивать грамоту":"нужно знание букв","cog",(d,a)=>d.L>=6||!!a.C9]; // буквы — ближайший шаг от уровня пиктограмм или при знании букв без свободного письма
+// need: [проверка, причина при «нет», тип]; тип cog = когнитивное условие (даёт зону ближайшего развития)
+const lvl = (n)=>[(a,d)=>d.L>=n, d=>`нужен уровень «${(d.v?LV:LVt)[n]}», сейчас — «${(d.v?LV:LVt)[d.L]}»`, "cog", n];
+const T = [
+ {n:"1",  name:"Естественные довербальные средства", role:"система", need:[], ind:()=>"основа любой системы АДК", rule:"всегда"},
+ {n:"2",  name:"Сигналы «да / нет», выбор из вариантов", role:"система + способ доступа", need:[[a=>a.C13,"пока нет надёжных ответов «да / нет»","cog",(d,a)=>!!a.C1]], ind:a=>(!a.B2&&!a.B6)?"нет указания рукой и взглядом — выбор из вариантов, перебираемых партнёром":null, note:(a,d)=>(!a.B2&&!a.B6)?(a.C14?(d.v?"партнёр показывает варианты по очереди":"слуховой вариант: партнёр называет варианты вслух"):"для перебора вариантов сначала научить ждать и следить"):null, rule:"<code>C13</code>"},
+ {n:"3",  name:"Функциональные жесты, Макатон", role:"система", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2,"нужны направленные движения рук"],[a=>a.D5,"окружение не готово учить жесты"],[a=>a.C11,"нет подражания движениям рук","cog"],lvl(3)], ind:a=>a.A2&&!a.C12?"поддерживает понимание речи":null, rule:"<code>A1 B2 D5 C11</code>, уровень ≥ копии предметов"},
+ {n:"4.1",name:"Тактильные жесты", role:"система", need:[[(a,d)=>!d.v&&!d.h,"средство для слепоглухих"],[(a,d)=>d.t,"нужна тактильная чувствительность"],[a=>a.B4,"нужны раздельные движения пальцев"],lvl(3)], ind:()=>"слепоглухота", rule:"нет <code>A1</code> и <code>A2</code>; <code>A3 B4</code>, уровень ≥ копии предметов"},
+ {n:"4.2",name:"Дактильно-контактная речь, дермография, ЛОРМ", role:"система", need:[[(a,d)=>!d.v&&!d.h,"средство для слепоглухих"],[(a,d)=>d.t,"нужна тактильная чувствительность"],[a=>a.B4,"нужны раздельные движения пальцев"],LET], ind:()=>"слепоглухота", rule:"нет <code>A1</code> и <code>A2</code>; <code>A3 B4 C9 C9f</code>"},
+ {n:"11", name:"PECS", role:"носитель", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B3,"нужно взять и передать карточку"],[(a,d)=>!(a.D1&&d.W),"сам начинает общение и владеет буквами — PECS избыточен"],lvl(1)], ind:a=>a.D1===false?"не начинает общение сам — PECS учит инициативе":null, note:a=>a.B7===false?"фаза II (подход к партнёру) потребует адаптации":null, rule:"<code>A1 B3 C1</code>; не (<code>D1</code> и <code>C9</code>)"},
+ {n:"12", name:"Коммуникативные доски / таблицы", role:"носитель", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2,"нужно указание рукой (без рук — указание взглядом)"],lvl(4)], ind:()=>null, rule:"<code>A1 B2</code>, уровень ≥ фото"},
+ {n:"13", name:"Коммуникативные книги, PODD", role:"носитель", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2||a.B6||(a.C13&&a.C14),"нет способа указать на символ"],lvl(6)], ind:a=>a.C10?"сочетает символы — нужен большой словарь":null, note:a=>!a.B2?"страницы листает партнёр, выбор — взглядом или перебором вариантов":null, rule:"<code>A1</code>; <code>B2</code>, <code>B6</code> или <code>C13+C14</code>; уровень ≥ пиктограммы"},
+ {n:"14", name:"Указание взглядом: рамка E-tran, айтрекер", role:"способ доступа", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B6,"нужен контроль взгляда и головы"],[a=>!a.B2,"указывает рукой — указание взглядом не нужно"],lvl(4)], ind:()=>"нет указания рукой, есть контроль взгляда", note:a=>a.D6?"возможен айтрекер (при понимании связи «действие → результат»)":"коммуникативная рамка — без электронного устройства", rule:"<code>A1 B6</code>, нет <code>B2</code>, уровень ≥ фото"},
+ {n:"15", name:"Предметное расписание", role:"рецептивное", need:[[a=>a.D4,"нет запроса на поддержку распорядка"],[(a,d)=>!d.v||d.L<4,"подойдёт графическое расписание"],lvl(2)], ind:()=>"предсказуемость распорядка", rule:"<code>D4</code>; уровень ≥ функц. предметы; без зрения или уровень ниже фото"},
+ {n:"16", name:"Графическое расписание, пооперационные карты", role:"рецептивное", need:[[a=>a.D4,"нет запроса на поддержку распорядка"],[(a,d)=>d.v,"нужно зрение"],lvl(4)], ind:()=>"предсказуемость, последовательность действий", rule:"<code>D4 A1</code>, уровень ≥ фото"},
+ {n:"17", name:"Однокнопочный коммуникатор", role:"носитель", need:[[a=>a.B1,"нет надёжного произвольного движения"],[a=>a.D6,"нет возможности приобрести устройство"],[a=>a.C2,"нет понимания связи «действие → результат»","cog"]], ind:(a,d)=>a.D3?"привлечение внимания голосом":(d.L<=2?"обучение связи «действие → результат»":null), rule:"<code>B1 C2 D6</code>"},
+ {n:"18", name:"Многокнопочный коммуникатор", role:"носитель", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2,"нужно нажать нужную кнопку рукой"],[a=>a.D6,"нет возможности приобрести устройство"],lvl(4)], ind:a=>(a.D2||a.D3)?"нужен голосовой вывод":null, rule:"<code>A1 B2 D6</code>, уровень ≥ фото"},
+ {n:"19", name:"Приложение-коммуникатор с синтезом речи", role:"носитель", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2||a.B6,"нет способа управления (касание или взгляд)"],[a=>a.D6,"нет возможности приобрести устройство"],lvl(5)], ind:a=>a.D2?"общение с незнакомыми людьми":(a.C10?"большой словарь и сочетания":null), note:a=>!a.B2?"управление через айтрекер":null, rule:"<code>A1 D6</code>; <code>B2</code> или <code>B6</code>; уровень ≥ картинки"},
+ {n:"20", name:"Алфавитная доска (выкладывание букв)", role:"система", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B3&&a.B4,"нужен захват и перенос мелких букв"],LET], ind:()=>null, rule:"<code>A1 B3 B4 C9 C9f</code>"},
+ {n:"21", name:"Слоговые и буквенные таблицы", role:"носитель", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2||a.B6||(a.C13&&a.C14),"нет способа указать на букву"],LET], ind:a=>!a.B5?"письмо рукой недоступно":null, note:a=>!a.B2?(a.B6?"через указание взглядом":"через перебор рядов и букв партнёром"):null, rule:"<code>A1 C9 C9f</code>; <code>B2</code>, <code>B6</code> или <code>C13+C14</code>"},
+ {n:"22", name:"Письмо (рукописное)", role:"система", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B5,"нужно удерживать ручку"],LET], ind:()=>null, rule:"<code>A1 B5 C9 C9f</code>"},
+ {n:"23", name:"Печать / набор текста", role:"система", need:[[(a,d)=>d.v,"нужно зрение"],[a=>a.B2,"нужно нажимать клавиши"],[a=>a.D6,"нет устройства"],LET], ind:a=>a.D2?"с синтезом речи — общение с любым собеседником":null, rule:"<code>A1 B2 C9 C9f D6</code>"},
+ {n:"24", name:"Шрифт Брайля", role:"система", need:[[(a,d)=>!d.v,"при сохранном зрении не требуется"],[(a,d)=>d.t,"нужна тактильная чувствительность"],[a=>a.B4,"нужны раздельные движения пальцев"],LET], ind:()=>"нарушение зрения", rule:"нет <code>A1</code>; <code>A3 B4 C9 C9f</code>"},
+];
+
+// ---------- ОЦЕНКА ----------
+function visible(a){return Q.filter(q=>!q.s||q.s(a))}
+function clean(a){ // скрытые вопросы не учитываются
+  const out={}; let changed=true, cur={...a};
+  while(changed){changed=false; const vis=new Set(visible(cur).map(q=>q.id));
+    for(const k in cur){ if(!vis.has(k)){delete cur[k];changed=true;} } }
+  return cur;
+}
+function evaluate(raw){
+  const a=clean(raw), d=derive(a), g=group(a);
+  const rec=[],zbr=[],exc=[];
+  for(const t of T){
+    const fails=[];
+    for(const nd of t.need){ if(!nd[0](a,d)) fails.push(nd); }
+    if(!fails.length){ rec.push({t, ind:t.ind(a,d), gi:GI[g][t.n]||null, note:t.note?t.note(a,d):null}); continue; }
+    const onlyCog = fails.every(f=>f[2]==="cog");
+    const f0=fails[0][3]; const near = fails.length===1 && onlyCog && (f0===undefined || (typeof f0==="function"?f0(d,a):d.L===f0-1));
+    const why = fails.map(f=>typeof f[1]==="function"?f[1](d):f[1]);
+    (near?zbr:exc).push({t, why});
+  }
+  rec.sort((x,y)=>((y.gi?2:0)+(y.ind?1:0))-((x.gi?2:0)+(x.ind?1:0)));
+  return {a,d,g,rec,zbr,exc};
+}
+// Классификация С. фон Течнера и Х. Мартинсена: группы по тому, для чего нужна АДК
+const G = {
+ alt:{name:"Альтернативная коммуникация", short:"альтернативная",
+   d:"Речь не служит ни для понимания, ни для выражения. АДК нужна в обе стороны: собеседники сами обращаются к человеку жестами и символами (моделирование), средства для понимания — в приоритете. АДК становится основным языком."},
+ expr:{name:"Экспрессивная коммуникация", short:"экспрессивная",
+   d:"Человек понимает речь, но не может говорить, и развития речи не ожидается. АДК — постоянное средство выражения: нужен растущий словарь и путь к буквам."},
+ dev:{name:"Вспомогательная коммуникация (развитие речи)", short:"вспомогательная, развитие",
+   d:"Речь понимается и может развиться. АДК — временная опора, которая используется вместе с речью и поддерживает её появление."},
+ sit:{name:"Вспомогательная коммуникация (ситуативная)", short:"вспомогательная, ситуативная",
+   d:"Речь есть, но незнакомые люди её не понимают. АДК нужна в трудных ситуациях: указать тему, первую букву слова, повторить сообщение голосом устройства."},
+ lim:{name:"Вспомогательная коммуникация (ограниченная речь)", short:"вспомогательная, ограниченная речь",
+   d:"Речь понятна, но ограничена отдельными словами. АДК расширяет словарь за пределы отдельных слов и даёт способ просить, задавать вопросы и рассказывать, особенно с незнакомыми людьми."},
+ ok:{name:"Речь функциональна", short:"не требуется",
+   d:"Речь понимают и близкие, и незнакомые. Постоянное средство АДК, скорее всего, не нужно; отдельные средства могут понадобиться для понимания распорядка."},
+};
+function group(a){
+  const comp = a.A2===false ? !!a.E1 : !!a.C12;
+  if(!comp) return "alt";
+  if(a.E2 && a.E3 && a.E3f) return "ok";
+  if(a.E4) return "dev";
+  if(a.E2 && a.E3) return "lim";
+  if(a.E2) return "sit";
+  return "expr";
+}
+const GI = { // что значит группа для конкретного средства
+ alt:{"3":"собеседники жестикулируют при обращении — опора для понимания","11":"обмен карточками даёт первый способ сообщения","12":"собеседник показывает символы, когда говорит (моделирование)","13":"собеседник показывает символы, когда говорит (моделирование)","15":"АДК для понимания: распорядок","16":"АДК для понимания: распорядок и шаги","19":"собеседник моделирует высказывания на устройстве"},
+ expr:{"2":"постоянный канал ответов","13":"растущий словарь для постоянного выражения","14":"постоянный канал выражения","19":"растущий словарь для постоянного выражения","20":"путь к свободному высказыванию","21":"путь к свободному высказыванию","22":"путь к свободному высказыванию","23":"путь к свободному высказыванию"},
+ dev:{"3":"жесты поддерживают появление речи","11":"обмен карточками стимулирует речь","12":"символы сопровождают речь","17":"голосовой образец слова","18":"голосовой образец слова","19":"голосовой образец слова"},
+ sit:{"3":"жест уточняет неразборчивое слово","12":"тематическая доска: указать тему разговора","18":"голос устройства для незнакомых","19":"голос устройства для незнакомых","21":"первая буква уточняет неразборчивое слово","23":"набрать неразборчивое слово"},
+ lim:{"11":"обмен карточками учит просить по своей инициативе","12":"тематическая доска расширяет словарь за пределы отдельных слов","13":"словарь для просьб, вопросов и рассказа","16":"опора для понимания распорядка","18":"голос устройства для фраз","19":"голос устройства для фраз и вопросов"},
+ ok:{}
+};
+function rowland(a,d){
+  if(!a.C1) return ["I–II","поведение ещё не направлено на собеседника"];
+  if(d.W && a.C10) return ["VII + письменная речь","сочетания символов, побуквенный код"];
+  if(a.C10) return ["VII","сочетания символов"];
+  if(d.L>=7) return ["VI","абстрактные символы (слово целиком)"];
+  if(d.L>=3) return ["V","конкретные символы"];
+  return ["III–IV","досимволическая коммуникация"];
+}
+function symbols(a,d){
+  if(d.W) return [d.v?"буквы, текст":"Брайль, дактильная азбука", "—"];
+  if(d.v){
+    const s=["естественные сигналы, реальные ситуации","естественные сигналы, реальные ситуации","функциональные предметы","копии и части предметов","фотографии","цветные картинки","пиктограммы","пиктограммы с подписями-словами"];
+    const nx=["намеренная коммуникация","функциональные предметы","копии и части предметов","фотографии","цветные картинки","пиктограммы","подписи-слова (глобальное чтение)","буквы"];
+    return [s[d.L],nx[d.L]];
+  }
+  const s=["естественные сигналы","естественные сигналы","функциональные предметы","копии и части предметов (на ощупь)","тактильные символы"];
+  const nx=["намеренная коммуникация","функциональные предметы","копии и части предметов","тактильные символы","буквенный код (Брайль, дактиль)"];
+  return [s[d.L],nx[d.L]];
+}
+
+// ---------- УРОВЕНЬ ДОСТУПНОЙ КОММУНИКАЦИИ И ОСНОВНОЕ СОЧЕТАНИЕ ----------
+function level5(a,d,rec){
+  if(!a.C1||d.L<=1) return ["Досимволическая","взгляд, мимика, движения, вокализации; символы пока не используются"];
+  if(d.W) return ["Письменная речь","человек свободно пользуется буквами"];
+  if(d.L>=4) return d.v?["Символическая с помощью изображений","фотографии, картинки, пиктограммы"]:["Символическая с помощью тактильных символов","символы, узнаваемые на ощупь"];
+  const gest=rec.some(r=>r.t.n==="3"||r.t.n==="4.1");
+  return gest?["Символическая с помощью предметов и жестов","предметные символы; доступны жесты"]:["Символическая с помощью предметов","функциональные предметы, копии и части предметов"];
+}
+function needPassport(a,d,g){
+  if(!a.C1||d.L<=2) return "сигналы человека пока неконвенциональны: описать их, чтобы все сотрудники понимали их одинаково";
+  if(a.E2&&!a.E3) return "речь неразборчива: описать, как понимать человека";
+  if(!a.E2&&a.A2===false) return "нет речи и нарушен слух: описать способы общения для новых собеседников";
+  if(g==="alt") return "речь не служит для общения: описать, как человек сообщает о своих желаниях";
+  return null;
+}
+function core(a,d,g,rec){
+  const has=n=>rec.find(r=>r.t.n===n);
+  const main=(!a.C1||d.L<=1)?has("1"):rec.find(r=>(r.t.role==="носитель"||r.t.role==="система")&&!["1","2"].includes(r.t.n));
+  const access=has("14")||((!a.B2&&!a.B6)?has("2"):null);
+  const recp=has("16")||has("15");
+  const out=[["Тип символов",symbols(a,d)[0]]];
+  out.push(["Основное средство",main?main.t.n+". "+main.t.name:"естественные средства и сигналы «да / нет»"]);
+  if(access) out.push(["Способ доступа",access.t.n+". "+access.t.name]);
+  if(recp) out.push(["Для понимания распорядка",recp.t.n+". "+recp.t.name]);
+  const p=needPassport(a,d,g); if(p) out.push(["Коммуникативный паспорт",p]);
+  return out;
+}
+
+// ---------- ПРИМЕРЫ ----------
+const P = {
+ ras:{A1:1,A2:1,B1:1,B2:1,B3:1,B4:1,B5:0,B6:1,B7:1,C1:1,C2:1,C3:1,C4:1,C5:1,C6:1,C7:0,C9:0,C10:0,C11:0,C12:0,C13:0,C14:1,E2:0,E4:0,D1:0,D2:1,D3:0,D4:1,D5:1,D6:1},
+ dcp:{A1:1,A2:1,B1:1,B2:0,B6:1,B7:0,C1:1,C2:1,C3:1,C4:1,C5:1,C6:1,C7:1,C8:0,C9:0,C10:0,C11:0,C12:1,C13:1,C14:1,E2:0,E4:0,D1:0,D2:0,D3:1,D4:1,D5:0,D6:1},
+ dz:{A1:1,A2:1,B1:1,B2:1,B3:1,B4:1,B5:0,B6:1,B7:1,C1:1,C2:1,C3:1,C4:1,C5:1,C6:1,C7:1,C8:0,C9:0,C10:1,C11:1,C12:1,C13:1,C14:1,E2:1,E3:0,E4:0,D1:1,D2:1,D3:0,D4:1,D5:1,D6:1},
+ sg:{A1:0,A2:0,A3:1,B1:1,B2:1,B3:1,B4:1,B5:0,B7:1,C1:1,C2:1,C3:1,C4:0,C11:1,C13:0,C14:0,E1:0,E2:0,E4:0,D1:0,D2:0,D3:0,D4:1,D5:1,D6:0},
+ tmnr:{A1:1,A2:1,B1:1,B2:0,B6:0,B7:0,C1:0,C2:1,C12:0,C14:0,E2:0,E4:0,D2:0,D3:1,D4:1,D5:0,D6:1},
+};
+function fromProfile(p){const o={};for(const k in p)o[k]=!!p[k];return o}
+
+// ---------- СОСТОЯНИЕ ----------
+let A = {}, current="new";
+try{const s=JSON.parse(localStorage.getItem("adk-q")||"null"); if(s&&s.A){A=s.A;current=s.p||"";}}catch(e){}
+function save(){try{localStorage.setItem("adk-q",JSON.stringify({A,p:current}))}catch(e){}}
+
+// ---------- ОТРИСОВКА ----------
+const cyr=id=>id.replace(/\b([ABCDE])(\d+)([tf]?)/g,(m,l,n,t)=>({A:"А",B:"Б",C:"В",D:"Д",E:"Г"}[l])+n+({t:"т",f:"ф"}[t]||""));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function renderQ(){
+  const vis=visible(clean(A)); const blocks={};
+  vis.forEach(q=>(blocks[q.b]=blocks[q.b]||[]).push(q));
+  let h="";
+  for(const b in blocks){
+    const qs=blocks[b], done=qs.filter(q=>A[q.id]!==undefined).length;
+    h+=`<div class="block"><h2><span>${b}</span><span>${done}/${qs.length}</span></h2>`;
+    for(const q of qs){
+      const v=A[q.id];
+      h+=`<div class="q"><span class="code">${cyr(q.id)}</span>
+      <div class="txt">${esc(q.t)}${q.h?`<span class="hint">${esc(q.h)}</span>`:""}</div>
+      <div class="yn" role="group" aria-label="Ответ"><button class="y" id="y-${q.id}" data-q="${q.id}" data-v="1" aria-pressed="${v===true}">Да</button><button class="n" id="n-${q.id}" data-q="${q.id}" data-v="0" aria-pressed="${v===false}">Нет</button></div></div>`;
+    }
+    h+=`</div>`;
+  }
+  document.getElementById("questions").innerHTML=h;
+}
+function item(r,kind){
+  let s=`<div class="item"><span class="num">${r.t.n}</span><b>${esc(r.t.name)}</b><span class="role">${r.t.role}</span>`;
+  if(kind==="rec"){ if(r.gi) s+=`<br><span class="tag gtag">для группы: ${esc(r.gi)}</span>`; if(r.ind) s+=`<br><span class="tag">показано: ${esc(r.ind)}</span>`; if(r.note) s+=`<span class="why">${esc(r.note)}</span>`; }
+  else s+=`<span class="why">${kind==="zbr"?"чему учить: ":""}${esc(r.why.join("; "))}</span>`;
+  return s+`</div>`;
+}
+function renderR(){
+  const {a,d,g,rec,zbr,exc}=evaluate(A);
+  const left=visible(a).filter(q=>A[q.id]===undefined).length;
+  const [rl,rd]=rowland(a,d), [sy,nx]=symbols(a,d);
+  const L5=level5(a,d,rec), CR=core(a,d,g,rec);
+  let h=`<h2>Итог</h2>`;
+  if(left) h+=`<div class="pending">Осталось вопросов: ${left}. Пока они без ответа, они считаются ответом «нет».</div>`;
+  h+=`<dl class="levels">
+    <div><dt>Доступный уровень коммуникации</dt><dd>${L5[0]}<small>${L5[1]}</small></dd></div>
+    <div><dt>Группа (Течнер)</dt><dd>${G[g].name}<small>${G[g].d}</small></dd></div>
+    <div><dt>Тип символов</dt><dd>${sy}<small>следующий шаг: ${nx}</small></dd></div></dl>`;
+  h+=`<div class="sec core"><h3><i></i>Основное сочетание</h3>${CR.map(([k,v])=>`<div class="item"><b>${esc(k)}:</b> ${esc(v)}</div>`).join("")}</div>`;
+  h+=`<div class="sec rec"><h3><i></i>Подходят сейчас · ${rec.length}</h3>${rec.map(r=>item(r,"rec")).join("")||`<p class="empty">Нет подходящих средств.</p>`}</div>`;
+  h+=`<div class="sec zbr"><h3><i></i>Зона ближайшего развития · ${zbr.length}</h3>${zbr.map(r=>item(r,"zbr")).join("")||`<p class="empty">Нет средств, до которых не хватает одного шага.</p>`}</div>`;
+  h+=`<div class="sec exc"><details id="exc"><summary>Не подходят сейчас · ${exc.length}</summary>${exc.map(r=>item(r,"exc")).join("")}</details></div>`;
+  h+=`<div class="actions"><button class="btn" id="send">Отправить</button><button class="btn ghost" id="copy">Скопировать итог</button><button class="btn ghost" id="reset">Очистить ответы</button></div>
+  <p class="sendmsg" id="sendmsg" hidden></p>
+  <textarea class="copyarea" id="copytext" hidden readonly></textarea>
+  <p class="note">Опросник даёт первичный подбор. Окончательное решение принимается после пробного использования средства. Обычно человеку подходит сочетание: тип символов + носитель (+ способ доступа) + естественные средства.</p>`;
+  const open=document.getElementById("exc")?.open;
+  document.getElementById("result").innerHTML=h;
+  if(open) document.getElementById("exc").open=true;
+}
+function summaryText(){
+  const {a,d,g,rec,zbr}=evaluate(A); const [rl]=rowland(a,d), [sy,nx]=symbols(a,d);
+  return `Подбор средств АДК\nДоступный уровень коммуникации: ${level5(a,d,rec)[0]}\nГруппа по Течнеру: ${G[g].name}\nТип символов: ${sy} (следующий шаг: ${nx})\n\nОсновное сочетание:\n`+core(a,d,g,rec).map(([k,v])=>`- ${k}: ${v}`).join("\n")+`\n\nПодходят сейчас:\n`+
+   rec.map(r=>`- ${r.t.n}. ${r.t.name}${r.gi?` (для группы: ${r.gi})`:""}${r.ind?` (показано: ${r.ind})`:""}${r.note?`; ${r.note}`:""}`).join("\n")+
+   `\n\nЗона ближайшего развития:\n`+(zbr.map(r=>`- ${r.t.n}. ${r.t.name}: ${r.why.join("; ")}`).join("\n")||"- нет");
+}
+function fullText(){
+  const a=clean(A);
+  const now=new Date(), dt=now.toLocaleDateString("ru-RU")+" "+now.toLocaleTimeString("ru-RU",{hour:"2-digit",minute:"2-digit"});
+  const vis=visible(a); let blk="", ans="";
+  for(const q of vis){ if(q.b!==blk){blk=q.b; ans+=`\n${blk}:\n`;} const v=A[q.id]; ans+=`${cyr(q.id)}. ${q.t} — ${v===true?"да":v===false?"нет":"нет ответа"}\n`; }
+  return `ОПРОСНИК «ПОДБОР СРЕДСТВ АДК»\nДата заполнения: ${dt}\n\nОТВЕТЫ\n${ans}\nИТОГ\n${summaryText().replace(/^Подбор средств АДК\n/,"")}`;
+}
+function renderRules(){
+  const ql=Q.map(q=>`<tr><td class="n">${cyr(q.id)}</td><td>${esc(q.b)}</td><td>${esc(q.t)}</td></tr>`).join("");
+  const tl=T.map(t=>`<tr><td class="n">${t.n}</td><td><b>${esc(t.name)}</b><br><span style="color:var(--muted);font-size:12.5px">${t.role}</span></td><td>${t.rule}</td><td>${t.need.map(n=>typeof n[1]==="function"?(typeof n[3]==="number"?`уровень ≥ «${LV[n[3]]}»`:""):esc(n[1])).filter(Boolean).join("; ")}</td></tr>`).join("");
+  document.getElementById("v-r").innerHTML=`
+   <p>Средство попадает в «Подходят сейчас», если выполнены все его условия. В «Зону ближайшего развития» — если не выполнено ровно одно условие, и оно когнитивное: до нужного уровня символов не хватает одной ступени или не сформирован один навык (подражание, ответы «да / нет», связь «действие → результат», свободное использование письменной речи при знании букв). Вопросы, скрытые по ходу опроса, считаются ответом «нет». Типы символов (п. 5–10 списка) не перечисляются среди средств: они определяются по лестнице уровней и выводятся отдельной строкой итога.</p>
+   <h3>Уровень доступной коммуникации и основное сочетание</h3>
+   <p>Уровень доступной коммуникации выводится по пятиуровневой шкале: досимволическая; символическая с помощью предметов (при доступности жестов — предметов и жестов); символическая с помощью изображений (без зрения — тактильных символов); письменная речь. Блок «Основное сочетание» сводит итог к тому, с чего начать: тип символов, основное средство (первая по приоритету система или носитель из списка подходящих, при досимволическом уровне — естественные средства), способ доступа (указание взглядом или выбор из вариантов, если нет указания рукой), средство для понимания распорядка. Коммуникативный паспорт рекомендуется, если сигналы человека пока неконвенциональны (досимволический уровень или функциональные предметы), речь неразборчива, при отсутствии речи и нарушении слуха, а также в группе альтернативной коммуникации.</p>
+   <h3>Группа по Течнеру</h3>
+   <p>Группа показывает, <i>для чего</i> человеку нужна АДК, и определяет, какие из подходящих средств поднимаются наверх списка. Порядок проверки: не понимает речь (<code>C12</code>, при нарушении слуха — жесты, <code>E1</code>) → альтернативная; речь понятна и незнакомым и состоит из фраз (<code>E2</code>, <code>E3</code> и <code>E3f</code>) → АДК не требуется; ожидается развитие речи (<code>E4</code>) → вспомогательная, развитие; речь понятна, но ограничена отдельными словами (<code>E2</code> и <code>E3</code>, нет <code>E3f</code>) → вспомогательная, ограниченная речь; речь есть, но неразборчива (<code>E2</code>) → вспомогательная, ситуативная; иначе → экспрессивная.</p><p>Уровень письменной речи определяется, только если человек знает буквы (<code>C9</code>) и пользуется письменной речью свободно (<code>C9f</code>). Если буквы знакомы, но письмо затруднено, буквенные средства попадают в зону ближайшего развития, а тип символов определяется по уровню изображений.</p>
+   <ul class="ladder">${Object.values(G).map(x=>`<li>${x.name}</li>`).join("")}</ul>
+   <h3>Лестница уровней символов</h3>
+   <ul class="ladder">${LV.map((l,i)=>`<li><span>${i}</span>${l}</li>`).join("")}</ul>
+   <p>Без зрения ступень 4 — тактильные символы (вопрос <code>C5t</code>). Знание букв (<code>C9</code>) учитывается отдельно.</p>
+   <h3>Условия для средств</h3>
+   <div class="tw"><table><thead><tr><th>№</th><th>Средство</th><th>Нужны ответы «да»</th><th>Что проверяется</th></tr></thead><tbody>${tl}</tbody></table></div>
+   <h3 style="margin-top:24px">Вопросы</h3>
+   <div class="tw"><table><thead><tr><th>Код</th><th>Блок</th><th>Вопрос</th></tr></thead><tbody>${ql}</tbody></table></div>`.replace(/<code>([^<]*)<\/code>/g,(m,x)=>"<code>"+cyr(x)+"</code>");
+}
+function marks(){document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.profile===current))}
+function all(){renderQ();renderR();marks();save()}
+
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.q){const v=b.dataset.v==="1"; A[b.dataset.q]=(A[b.dataset.q]===v)?undefined:v; if(A[b.dataset.q]===undefined)delete A[b.dataset.q]; current=""; all(); document.getElementById(b.id)?.focus(); return;}
+  if(b.dataset.profile){current=b.dataset.profile; A=b.dataset.profile==="new"?{}:fromProfile(P[b.dataset.profile]); all(); return;}
+  if(b.id==="reset"){A={};current="new";all();return;}
+  if(b.id==="send"){const txt=fullText(), ta=document.getElementById("copytext"), msg=document.getElementById("sendmsg");
+    const left=visible(clean(A)).filter(q=>A[q.id]===undefined).length;
+    ta.hidden=false; ta.value=txt;
+    const show=(ok)=>{msg.hidden=false; msg.className="sendmsg"+((left||!ok)?" warn":"");
+      msg.textContent=(left?`Внимание: без ответа остались ${left} вопр. `:"")+(ok?"Ответы и итог скопированы. Вставьте их в письмо или сообщение и отправьте автору опросника.":"Выделите текст ниже, скопируйте его и отправьте автору опросника письмом или сообщением.");};
+    try{navigator.clipboard.writeText(txt).then(()=>show(true),()=>{ta.select();show(false)});}catch(err){ta.select();show(false);}
+    return;}
+  if(b.id==="copy"){const txt=summaryText(), ta=document.getElementById("copytext");
+    const done=()=>{b.textContent="Скопировано";setTimeout(()=>b.textContent="Скопировать итог",1600)};
+    try{navigator.clipboard.writeText(txt).then(done,()=>{ta.hidden=false;ta.value=txt;ta.select();b.textContent="Выделите и скопируйте"});}catch(err){ta.hidden=false;ta.value=txt;ta.select();}
+    return;}
+  if(b.id==="t-q"||b.id==="t-r"){const r=b.id==="t-r";document.getElementById("t-q").setAttribute("aria-selected",!r);document.getElementById("t-r").setAttribute("aria-selected",r);document.getElementById("v-q").hidden=r;document.getElementById("v-r").hidden=!r;}
+});
+renderRules(); all();
+</script>
+
+
+</body>
+</html>
